@@ -46,12 +46,29 @@ def fetch_bars(symbols, period="2y", batch=100):
     return out
 
 
+def market_is_bullish(symbol="SPY"):
+    """Regime filter: True if SPY closed above its 200-day SMA. Fails open on error."""
+    try:
+        df = yf.download(symbol, period="2y", interval="1d",
+                         auto_adjust=True, progress=False)
+        if isinstance(df.columns, pd.MultiIndex):
+            df.columns = df.columns.get_level_values(0)
+        df = df.dropna()
+        if len(df) < 200:
+            return True
+        sma200 = df["Close"].tail(200).mean()
+        return float(df["Close"].iloc[-1]) > float(sma200)
+    except Exception as e:
+        print(f"[data] regime check failed: {e}")
+        return True
+
+
 def scan(symbols):
     """Run the engine over each symbol, then apply technical filters."""
     bars_map = fetch_bars(symbols)
     hits = []
     for s, bars in bars_map.items():
-        eng = DarvasEngine(s)
+        eng = DarvasEngine(s, trail_every=config.TRAIL_EVERY)
         events = []
         for b in bars:
             events += eng.process_bar(b)
@@ -71,9 +88,8 @@ def scan(symbols):
 if __name__ == "__main__":
     from src.universe import build_universe
     uni = build_universe()
-    subset = uni
-    print(f"[scan] {len(subset)} tickers...")
-    results = scan(subset)
+    print(f"[scan] {len(uni)} tickers...")
+    results = scan(uni)
     if not results:
         print("[scan] no candidates today.")
     for sym, kind, entry, stop in results:

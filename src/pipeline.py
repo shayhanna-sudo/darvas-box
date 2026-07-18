@@ -1,21 +1,23 @@
-"""End-to-end EOD pipeline: scan -> technical filters -> fundamentals -> Gemini."""
+"""End-to-end EOD pipeline: regime gate -> scan -> filters -> fundamentals -> Gemini."""
+import config
 from src.universe import build_universe
-from src.data import scan
+from src.data import scan, market_is_bullish
 from src.fundamentals import get_fundamentals, fundamental_gate
 from src.ai_filter import hot_themes, judge_candidate
 
 
 def run():
+    if config.USE_REGIME_FILTER and not market_is_bullish():
+        print("[pipeline] SPY below 200SMA - market not bullish, standing aside.")
+        return []
     uni = build_universe()
     print(f"[pipeline] scanning {len(uni)} tickers...")
     candidates = scan(uni)
     print(f"[pipeline] {len(candidates)} technical candidates")
     if not candidates:
         return []
-
     themes = hot_themes()
     print(f"[pipeline] hot themes: {themes}")
-
     final = []
     for sym, kind, entry, stop in candidates:
         f = get_fundamentals(sym)

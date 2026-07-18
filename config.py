@@ -41,3 +41,11 @@ GEMINI_MODEL = "gemini-2.5-flash"
 # Position sizing
 MAX_POSITION_PCT = 0.25    # one position never exceeds 25% of equity
 ACCOUNT_EQUITY = 100000    # paper default; P6 pulls real equity from Alpaca
+
+# Locked config (backtested)
+TRAIL_EVERY = 3            # raise stop every 3rd box (sweet spot: PF 1.41)
+USE_REGIME_FILTER = True   # only trade when SPY > its 200-day SMA
+
+# Locked config (backtested)
+TRAIL_EVERY = 3            # raise stop every 3rd box (sweet spot: PF 1.41)
+USE_REGIME_FILTER = True   # only trade when SPY > its 200-day SMA
