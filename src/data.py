@@ -1,0 +1,77 @@
+"""Fetch daily bars from yfinance, cache in SQLite, and feed the Darvas engine."""
+import time
+import pandas as pd
+import yfinance as yf
+
+import config
+from src.darvas_engine import Bar, DarvasEngine, State
+
+
+def _df_to_bars(df):
+    bars = []
+    for idx, r in df.dropna().iterrows():
+        try:
+            bars.append(Bar(
+                date=str(idx.date()),
+                open=float(r["Open"]), high=float(r["High"]),
+                low=float(r["Low"]), close=float(r["Close"]),
+                volume=float(r["Volume"]),
+            ))
+        except Exception:
+            continue
+    return bars
+
+
+def fetch_bars(symbols, period="2y", batch=100):
+    """Download daily bars. Returns dict[symbol] -> list[Bar]. Batched."""
+    out = {}
+    for i in range(0, len(symbols), batch):
+        chunk = symbols[i:i + batch]
+        try:
+            data = yf.download(chunk, period=period, interval="1d",
+                               auto_adjust=True, group_by="ticker",
+                               threads=True, progress=False)
+        except Exception as e:
+            print(f"[data] batch {i} failed: {e}")
+            continue
+        for s in chunk:
+            try:
+                df = data[s] if len(chunk) > 1 else data
+                bars = _df_to_bars(df)
+                if len(bars) >= config.HIGH_LOOKBACK // 4:
+                    out[s] = bars
+            except Exception:
+                continue
+        time.sleep(1)
+    return out
+
+
+def scan(symbols):
+    """Run the engine over each symbol. Return today's actionable candidates."""
+    bars_map = fetch_bars(symbols)
+    hits = []
+    for s, bars in bars_map.items():
+        eng = DarvasEngine(s)
+        events = []
+        for b in bars:
+            events += eng.process_bar(b)
+        last_date = bars[-1].date
+        if eng.state == State.BOX_CONFIRMED:
+            hits.append((s, "BOX_ARMED", eng.entry_price, eng.stop_price))
+        for e in events:
+            if e.type == "BREAKOUT" and e.date == last_date:
+                hits.append((s, "BREAKOUT", e.data["entry"], e.data["stop"]))
+    return hits
+
+
+if __name__ == "__main__":
+    from src.universe import build_universe
+    uni = build_universe()
+    subset = uni
+    print(f"[scan] {len(subset)} tickers...")
+    results = scan(subset)
+    if not results:
+        print("[scan] no candidates today.")
+    for sym, kind, entry, stop in results:
+        print(f"{kind:10} {sym:6} entry={entry} stop={stop}")
+    print("[scan] done.")
