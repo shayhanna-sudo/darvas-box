@@ -15,8 +15,8 @@ MIN_PRICE = 5.0            # skip sub-$5 names
 MIN_AVG_DOLLAR_VOL = 5_000_000  # liquidity floor
 
 # Fundamental gate (deterministic, pre-AI)
-MIN_EPS_YOY_GROWTH = 0.10  # 10% YoY EPS growth
-MIN_REV_YOY_GROWTH = 0.10  # 10% YoY revenue growth
+MIN_EPS_YOY_GROWTH = 0.05  # 10% YoY EPS growth
+MIN_REV_YOY_GROWTH = 0.05  # 10% YoY revenue growth
 
 # Risk management
 MAX_TRADES_PER_DAY = 20
@@ -34,3 +34,6 @@ DB_PATH = "data/darvas.db"
 # P3 filters
 MAX_BOX_WIDTH = 0.12       # reject boxes wider than 12% (stop distance = risk)
 NEAR_HIGH_PCT = 0.05       # box top must be within 5% of the 52-week high
+
+# AI layer (Gemini)
+GEMINI_MODEL = "gemini-2.5-flash"
