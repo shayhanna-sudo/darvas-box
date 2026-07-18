@@ -30,3 +30,7 @@ SCAN_MINUTE_UTC = 15
 
 # Paths
 DB_PATH = "data/darvas.db"
+
+# P3 filters
+MAX_BOX_WIDTH = 0.12       # reject boxes wider than 12% (stop distance = risk)
+NEAR_HIGH_PCT = 0.05       # box top must be within 5% of the 52-week high

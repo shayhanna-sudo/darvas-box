@@ -5,6 +5,7 @@ import yfinance as yf
 
 import config
 from src.darvas_engine import Bar, DarvasEngine, State
+from src.filters import passes_filters
 
 
 def _df_to_bars(df):
@@ -23,7 +24,6 @@ def _df_to_bars(df):
 
 
 def fetch_bars(symbols, period="2y", batch=100):
-    """Download daily bars. Returns dict[symbol] -> list[Bar]. Batched."""
     out = {}
     for i in range(0, len(symbols), batch):
         chunk = symbols[i:i + batch]
@@ -47,7 +47,7 @@ def fetch_bars(symbols, period="2y", batch=100):
 
 
 def scan(symbols):
-    """Run the engine over each symbol. Return today's actionable candidates."""
+    """Run the engine over each symbol, then apply technical filters."""
     bars_map = fetch_bars(symbols)
     hits = []
     for s, bars in bars_map.items():
@@ -57,10 +57,14 @@ def scan(symbols):
             events += eng.process_bar(b)
         last_date = bars[-1].date
         if eng.state == State.BOX_CONFIRMED:
-            hits.append((s, "BOX_ARMED", eng.entry_price, eng.stop_price))
+            ok, _ = passes_filters(bars, eng.box_top, eng.box_bottom)
+            if ok:
+                hits.append((s, "BOX_ARMED", eng.entry_price, eng.stop_price))
         for e in events:
             if e.type == "BREAKOUT" and e.date == last_date:
-                hits.append((s, "BREAKOUT", e.data["entry"], e.data["stop"]))
+                ok, _ = passes_filters(bars, e.data["box_top"], e.data["box_bottom"])
+                if ok:
+                    hits.append((s, "BREAKOUT", e.data["entry"], e.data["stop"]))
     return hits
 
 
@@ -73,5 +77,6 @@ if __name__ == "__main__":
     if not results:
         print("[scan] no candidates today.")
     for sym, kind, entry, stop in results:
-        print(f"{kind:10} {sym:6} entry={entry} stop={stop}")
+        w = (1 - stop / entry) * 100
+        print(f"{kind:10} {sym:6} entry={entry} stop={stop}  risk~{w:.1f}%")
     print("[scan] done.")
