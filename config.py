@@ -37,3 +37,7 @@ NEAR_HIGH_PCT = 0.05       # box top must be within 5% of the 52-week high
 
 # AI layer (Gemini)
 GEMINI_MODEL = "gemini-2.5-flash"
+
+# Position sizing
+MAX_POSITION_PCT = 0.25    # one position never exceeds 25% of equity
+ACCOUNT_EQUITY = 100000    # paper default; P6 pulls real equity from Alpaca
