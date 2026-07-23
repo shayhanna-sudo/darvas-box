@@ -1,4 +1,4 @@
-"""Fully automatic EOD runner: clean stale orders -> pipeline -> rank -> guards -> execute -> notify."""
+"""Fully automatic EOD runner (maintain-don't-churn): skip held/pending, drop stale, add new."""
 import config
 from src.pipeline import run as run_pipeline
 from src.rank import rank_and_select
@@ -12,25 +12,27 @@ def main():
         tg.send_message("Darvas AUTO: kill switch ON - no trades.")
         return
 
-    canceled = broker.cancel_unheld_open_orders()
-    if canceled:
-        broker.wait_orders_cleared()
     candidates = run_pipeline()
     equity = broker.get_equity()
     bp = broker.get_buying_power()
     held = broker.open_symbols()
-    open_n = len(held)
+    pending = {o.symbol for o in broker.open_orders() if o.symbol not in held}
+    candidate_syms = {c["symbol"] for c in candidates}
 
-    slots = min(config.MAX_OPEN_POSITIONS - open_n, config.MAX_TRADES_PER_DAY)
-    fresh = [c for c in candidates if c["symbol"] not in held]
-    picks = rank_and_select(fresh, slots)
+    dropped = broker.cancel_orders_for_symbols(pending - candidate_syms)
+    pending -= (pending - candidate_syms)
 
-    lines = [f"Darvas AUTO - equity ${equity:,.0f} | BP ${bp:,.0f} | {open_n} held | "
-             f"canceled {canceled} stale | reviewing {len(picks)}:"]
-    for c in picks:
+    committed = held | pending
+    slots = min(config.MAX_OPEN_POSITIONS - len(committed), config.MAX_TRADES_PER_DAY)
+    ranked = rank_and_select(candidates, len(candidates))
+    fresh = [c for c in ranked if c["symbol"] not in committed][:max(0, slots)]
+
+    lines = [f"Darvas AUTO - equity ${equity:,.0f} | BP ${bp:,.0f} | "
+             f"{len(held)} held | {len(pending)} pending | dropped {dropped} | new {len(fresh)}:"]
+    for c in fresh:
         price = broker.latest_price(c["symbol"])
         if price is not None and price >= c["entry"]:
-            lines.append(f"  skip {c['symbol']} (price {price} >= entry {c['entry']} - missed/stale box)")
+            lines.append(f"  skip {c['symbol']} (price {price} >= entry {c['entry']} - missed/stale)")
             continue
         qty = risk.position_size(equity, c["entry"], c["stop"])
         if qty <= 0:
@@ -45,8 +47,7 @@ def main():
             tg.insert_signal(c)
             bp -= cost
             hot = "HOT" if c.get("theme_match") else ""
-            lines.append(f"  BUY {c['symbol']} x{qty} @ {c['entry']} stop {c['stop']} "
-                         f"score {c['score']} {hot}")
+            lines.append(f"  BUY {c['symbol']} x{qty} @ {c['entry']} stop {c['stop']} score {c['score']} {hot}")
         except Exception as e:
             lines.append(f"  FAIL {c['symbol']}: {e}")
 

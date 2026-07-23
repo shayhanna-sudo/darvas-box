@@ -28,10 +28,6 @@ def get_buying_power():
     return float(_client.get_account().buying_power)
 
 
-def open_positions_count():
-    return len(_client.get_all_positions())
-
-
 def open_symbols():
     return {p.symbol for p in _client.get_all_positions()}
 
@@ -48,28 +44,18 @@ def open_orders():
     return _client.get_orders(filter=GetOrdersRequest(status=QueryOrderStatus.OPEN))
 
 
-def cancel_unheld_open_orders():
-    held = open_symbols()
+def cancel_orders_for_symbols(symbols):
+    if not symbols:
+        return 0
     n = 0
     for o in open_orders():
-        if o.symbol not in held:
+        if o.symbol in symbols:
             try:
                 _client.cancel_order_by_id(o.id)
                 n += 1
             except Exception as e:
                 print(f"[broker] cancel {o.symbol} failed: {e}")
     return n
-
-
-def wait_orders_cleared(timeout=20):
-    """Cancels are async - wait until unheld open orders are gone (frees buying power)."""
-    import time
-    for _ in range(timeout):
-        held = open_symbols()
-        if not [o for o in open_orders() if o.symbol not in held]:
-            return True
-        time.sleep(1)
-    return False
 
 
 def submit_darvas_order(symbol, qty, entry, stop):
