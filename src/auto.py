@@ -1,4 +1,4 @@
-"""Fully automatic EOD runner: clean stale orders -> pipeline -> rank -> size -> execute -> notify."""
+"""Fully automatic EOD runner: clean stale orders -> pipeline -> rank -> guard -> size -> execute -> notify."""
 import config
 from src.pipeline import run as run_pipeline
 from src.rank import rank_and_select
@@ -25,6 +25,10 @@ def main():
     lines = [f"Darvas AUTO - equity ${equity:,.0f} | {open_n} held | "
              f"canceled {canceled} stale | placing {len(picks)}:"]
     for c in picks:
+        price = broker.latest_price(c["symbol"])
+        if price is not None and price >= c["entry"]:
+            lines.append(f"  skip {c['symbol']} (price {price} >= entry {c['entry']} - missed/stale box)")
+            continue
         qty = risk.position_size(equity, c["entry"], c["stop"])
         if qty <= 0:
             lines.append(f"  skip {c['symbol']} (qty 0)")

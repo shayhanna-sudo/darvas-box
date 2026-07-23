@@ -1,11 +1,23 @@
-"""Alpaca (paper) execution: equity, positions, orders, and Darvas OTO (buy-stop + stop-loss)."""
+"""Alpaca (paper) execution: equity, positions, orders, prices, Darvas OTO (buy-stop + stop-loss)."""
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import StopOrderRequest, StopLossRequest, GetOrdersRequest
 from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass, QueryOrderStatus
+from alpaca.data.historical import StockHistoricalDataClient
+from alpaca.data.requests import StockLatestTradeRequest
 import secrets_conf
 
 _client = TradingClient(secrets_conf.ALPACA_API_KEY, secrets_conf.ALPACA_SECRET_KEY,
                         paper=secrets_conf.ALPACA_PAPER)
+_data = StockHistoricalDataClient(secrets_conf.ALPACA_API_KEY, secrets_conf.ALPACA_SECRET_KEY)
+
+
+def latest_price(symbol):
+    try:
+        r = _data.get_stock_latest_trade(StockLatestTradeRequest(symbol_or_symbols=symbol))
+        return float(r[symbol].price)
+    except Exception as e:
+        print(f"[broker] price {symbol} failed: {e}")
+        return None
 
 
 def get_equity():
