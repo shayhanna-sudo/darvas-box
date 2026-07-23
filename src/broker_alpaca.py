@@ -1,4 +1,4 @@
-"""Alpaca (paper) execution: equity, positions, orders, prices, Darvas OTO (buy-stop + stop-loss)."""
+"""Alpaca (paper): equity, buying power, positions, orders, prices, Darvas OTO order."""
 from alpaca.trading.client import TradingClient
 from alpaca.trading.requests import StopOrderRequest, StopLossRequest, GetOrdersRequest
 from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass, QueryOrderStatus
@@ -22,6 +22,10 @@ def latest_price(symbol):
 
 def get_equity():
     return float(_client.get_account().equity)
+
+
+def get_buying_power():
+    return float(_client.get_account().buying_power)
 
 
 def open_positions_count():
@@ -55,6 +59,17 @@ def cancel_unheld_open_orders():
             except Exception as e:
                 print(f"[broker] cancel {o.symbol} failed: {e}")
     return n
+
+
+def wait_orders_cleared(timeout=20):
+    """Cancels are async - wait until unheld open orders are gone (frees buying power)."""
+    import time
+    for _ in range(timeout):
+        held = open_symbols()
+        if not [o for o in open_orders() if o.symbol not in held]:
+            return True
+        time.sleep(1)
+    return False
 
 
 def submit_darvas_order(symbol, qty, entry, stop):

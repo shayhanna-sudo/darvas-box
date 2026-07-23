@@ -1,4 +1,4 @@
-"""Fully automatic EOD runner: clean stale orders -> pipeline -> rank -> guard -> size -> execute -> notify."""
+"""Fully automatic EOD runner: clean stale orders -> pipeline -> rank -> guards -> execute -> notify."""
 import config
 from src.pipeline import run as run_pipeline
 from src.rank import rank_and_select
@@ -13,8 +13,11 @@ def main():
         return
 
     canceled = broker.cancel_unheld_open_orders()
+    if canceled:
+        broker.wait_orders_cleared()
     candidates = run_pipeline()
     equity = broker.get_equity()
+    bp = broker.get_buying_power()
     held = broker.open_symbols()
     open_n = len(held)
 
@@ -22,8 +25,8 @@ def main():
     fresh = [c for c in candidates if c["symbol"] not in held]
     picks = rank_and_select(fresh, slots)
 
-    lines = [f"Darvas AUTO - equity ${equity:,.0f} | {open_n} held | "
-             f"canceled {canceled} stale | placing {len(picks)}:"]
+    lines = [f"Darvas AUTO - equity ${equity:,.0f} | BP ${bp:,.0f} | {open_n} held | "
+             f"canceled {canceled} stale | reviewing {len(picks)}:"]
     for c in picks:
         price = broker.latest_price(c["symbol"])
         if price is not None and price >= c["entry"]:
@@ -33,9 +36,14 @@ def main():
         if qty <= 0:
             lines.append(f"  skip {c['symbol']} (qty 0)")
             continue
+        cost = qty * c["entry"]
+        if cost > bp:
+            lines.append(f"  skip {c['symbol']} (need ${cost:,.0f}, BP ${bp:,.0f})")
+            continue
         try:
             broker.submit_darvas_order(c["symbol"], qty, c["entry"], c["stop"])
             tg.insert_signal(c)
+            bp -= cost
             hot = "HOT" if c.get("theme_match") else ""
             lines.append(f"  BUY {c['symbol']} x{qty} @ {c['entry']} stop {c['stop']} "
                          f"score {c['score']} {hot}")
